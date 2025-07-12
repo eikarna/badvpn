@@ -1,0 +1,128 @@
+name: Build and Release Cross-Platform Binaries
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+jobs:
+  build-linux:
+    name: Build Linux (${{ matrix.arch }})
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        arch: [amd64, arm64]
+        include:
+          - arch: amd64
+            runner_arch: x86_64
+          - arch: arm64
+            runner_arch: aarch64
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up QEMU for ARM64 (if needed)
+        if: matrix.arch == 'arm64'
+        uses: docker/setup-qemu-action@v3
+
+      - name: Set up cross-compilation toolchain
+        run: |
+          if [ "${{ matrix.arch }}" = "arm64" ]; then
+            sudo apt-get update
+            sudo apt-get install -y gcc-aarch64-linux-gnu g++-aarch64-linux-gnu
+          fi
+
+      - name: Install dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y cmake make gcc g++ libssl-dev libnss3-dev libnspr4-dev
+
+      - name: Configure CMake
+        run: |
+          mkdir build
+          cd build
+          if [ "${{ matrix.arch }}" = "arm64" ]; then
+            cmake .. -DCMAKE_TOOLCHAIN_FILE=../cmake/toolchains/aarch64-linux-gnu.cmake -DBUILD_NOTHING_BY_DEFAULT=0
+          else
+            cmake .. -DBUILD_NOTHING_BY_DEFAULT=0
+          fi
+
+      - name: Build binaries
+        run: |
+          cd build
+          make -j$(nproc)
+
+      - name: Package binaries
+        run: |
+          cd build
+          mkdir out
+          cp server/badvpn-server out/ || true
+          cp client/badvpn-client out/ || true
+          cp tun2socks/badvpn-tun2socks out/ || true
+          cp udpgw/badvpn-udpgw out/ || true
+          tar czvf badvpn-${{ matrix.arch }}-linux.tar.gz out
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: badvpn-${{ matrix.arch }}-linux
+          path: build/badvpn-${{ matrix.arch }}-linux.tar.gz
+
+  build-windows:
+    name: Build Windows (amd64)
+    runs-on: windows-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up MSVC
+        uses: ilammy/msvc-dev-cmd@v1
+
+      - name: Install dependencies
+        run: choco install cmake -y
+
+      - name: Configure CMake
+        run: |
+          mkdir build
+          cd build
+          cmake .. -G "Visual Studio 17 2022" -A x64 -DBUILD_NOTHING_BY_DEFAULT=0
+
+      - name: Build binaries
+        run: |
+          cd build
+          cmake --build . --config Release
+
+      - name: Package binaries
+        shell: bash
+        run: |
+          cd build/Release
+          mkdir out
+          cp badvpn-server.exe out/ || true
+          cp badvpn-client.exe out/ || true
+          cp badvpn-tun2socks.exe out/ || true
+          cp badvpn-udpgw.exe out/ || true
+          tar czvf ../../badvpn-amd64-windows.tar.gz out
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: badvpn-amd64-windows
+          path: build/badvpn-amd64-windows.tar.gz
+
+  release:
+    name: Release
+    needs: [build-linux, build-windows]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Download artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            artifacts/badvpn-amd64-linux/badvpn-amd64-linux.tar.gz
+            artifacts/badvpn-arm64-linux/badvpn-arm64-linux.tar.gz
+            artifacts/badvpn-amd64-windows/badvpn-amd64-windows.tar.gz
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
