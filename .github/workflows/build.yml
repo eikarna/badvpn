@@ -10,27 +10,13 @@ jobs:
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        arch: [amd64, arm64]
+        arch: [amd64]
         include:
           - arch: amd64
             runner_arch: x86_64
-          - arch: arm64
-            runner_arch: aarch64
 
     steps:
       - uses: actions/checkout@v4
-
-      - name: Set up QEMU for ARM64 (if needed)
-        if: matrix.arch == 'arm64'
-        uses: docker/setup-qemu-action@v3
-
-      - name: Set up cross-compilation toolchain
-        run: |
-          if [ "${{ matrix.arch }}" = "arm64" ]; then
-            sudo apt-get update
-            sudo apt-get install -y gcc-aarch64-linux-gnu g++-aarch64-linux-gnu
-          fi
-
       - name: Install dependencies
         run: |
           sudo apt-get update
@@ -40,11 +26,7 @@ jobs:
         run: |
           mkdir build
           cd build
-          if [ "${{ matrix.arch }}" = "arm64" ]; then
-            cmake .. -DCMAKE_TOOLCHAIN_FILE=../cmake/toolchains/aarch64-linux-gnu.cmake -DBUILD_NOTHING_BY_DEFAULT=0
-          else
-            cmake .. -DBUILD_NOTHING_BY_DEFAULT=0
-          fi
+          cmake .. -DBUILD_NOTHING_BY_DEFAULT=0
 
       - name: Build binaries
         run: |
@@ -121,7 +103,6 @@ jobs:
         with:
           files: |
             artifacts/badvpn-amd64-linux/badvpn-amd64-linux.tar.gz
-            artifacts/badvpn-arm64-linux/badvpn-arm64-linux.tar.gz
             artifacts/badvpn-amd64-windows/badvpn-amd64-windows.tar.gz
         env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITHUB_TOKEN: ${{ secrets.GH_TOKEN }}
