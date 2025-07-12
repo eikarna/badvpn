@@ -61,7 +61,8 @@ jobs:
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
         with:
+          tag_name: workflow_${{github.run_number}}
+          name: Release ${{github.run_number}}
+          token: ${{secrets.GH_TOKEN}}
           files: |
             artifacts/badvpn-amd64-linux/badvpn-amd64-linux.tar.gz
-        env:
-          GITHUB_TOKEN: ${{ secrets.GH_TOKEN }}
