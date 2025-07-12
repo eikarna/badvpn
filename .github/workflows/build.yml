@@ -2,8 +2,7 @@ name: Build and Release Cross-Platform Binaries
 
 on:
   push:
-    tags:
-      - 'v*'
+  workflow_dispatch:
 
 jobs:
   build-linux:
